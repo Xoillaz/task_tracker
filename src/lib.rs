@@ -1,54 +1,90 @@
-struct Time {}
+use serde::{Deserialize, Serialize};
+use serde_json;
+use std::error::Error;
+use std::fs::File;
+use std::io::{BufReader, BufWriter};
+use std::path::Path;
 
-enum Status {
-    todo,
-    _ing,
-    done,
-    gone,
-}
-
+#[derive(Serialize, Deserialize, Debug, Clone)]
 struct Task {
     tid: u32,
-    detail: (Status, String),
-    createAt: Time,
-    updateAt: Time,
+    status: String,
+    detail: String,
 }
 
 struct Todo {
-    arr: vec!(Task)
+    data: Vec<Task>,
 }
 
-impl Todo {
-    fn load() {
+mod lib {
+    impl Todo {
+        fn new() -> Self {
+            Todo {
+                data: Todo::load().unwrap_or_default(),
+            }
+        } 
 
-    }
+        fn load() -> Result<Vec<Task>, Box<dyn Error>> {
+            let path = Path::new("log.json");
+            if path.exists() {
+                let file = File::open(path)?;
+                let reader = BufReader::new(file);
+                let data: Vec<Task> = serde_json::from_reader(reader)?;
+                Ok(data)
+            } else {
+                Ok(Vec::new())
+            }
+        }
 
-    fn save() {
-        
-    }
+        fn save(&self) -> Result<(), Box<dyn Error>> {
+             let file = File::create("log.json")?;
+             let writer = BufWriter::new(file);
+             serde_json::to_writer_pretty(writer, &self.data)?;
+             Ok(())
+        }
     
-    fn ls() {
-        vec = load();
-        for line in vec {
-            println!();
+        fn ls(&self, opt: String) {
+            if is_status(&opt) {
+                if let Some(i) = &self.data.iter().find(|i| i.status == opt) {
+                    println!("{} {}", i.tid, i.detail);
+                }
+            } else if opt == "all" {
+                if let Some(i) = &self.data.iter().find(|i| i.status != "gone") {
+                println!("{} {} {}", i.tid, i.status, i.detail);
+            } 
+            }else {
+                println!("Invalid status provided.");
+            }
+        }
+
+        fn add(&mut self, detail: String) {
+            self.data.push(Task {
+                tid: self.data.len() as u32,
+                status: "todo".to_string(),
+                detail,
+            });
+            self.save().unwrap();
+        }
+
+        fn mv(&mut self, tid_str: String, opt: String) {
+            if let Ok(tid) = tid_str.parse::<u32>() {
+                if let Some(item) = self.data.iter_mut().find(|item| item.tid == tid) {
+                    if is_status(&opt) {
+                        item.status = opt;
+                    } else {
+                        item.detail = opt;
+                    }
+                    self.save().unwrap();
+                } else {
+                    println!("Task with ID {} not found", tid);
+                }
+            } else {
+                println!("Invalid task_id provided.");
+            }
         }
     }
+}
 
-    fn add(detail) {
-        vec = load();
-        vec.append(Task(detail));
-        save(vec);
-    }
-
-    fn mv(tid, detail) {
-        use Status;
-
-        vec = load();
-        match type detail {
-            Status => , vec.locate(tid).detail.0 = detail
-            _ => vec.locate(tid).detail.1 = detail
-        }
-        vec.locate(tid).status = detail;
-        save(vec);
-    }
+fn is_status(opt: &str) -> bool {
+    matches!(opt, "todo" | "_ing" | "done" | "gone")
 }
